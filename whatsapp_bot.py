@@ -33,23 +33,44 @@ class WhatsAppBot:
 
     async def login(self, qr_path="qr_code.png"):
         """Navigates to WhatsApp Web and waits for the user to scan the QR code."""
-        print("Navigating to WhatsApp Web...")
-        await self.page.goto("https://web.whatsapp.com")
+        print("Navigating to WhatsApp Web (this may take a moment)...")
+        # Increase navigation timeout
+        await self.page.goto("https://web.whatsapp.com", timeout=60000)
 
-        # Wait for the QR code to appear or the main interface if already logged in
+        # Wait for either the QR code or the main interface
+        qr_selector = "canvas, [data-testid='qrcode']"
+        main_selector = "div[contenteditable='true'][data-tab='3'], #pane-side, [data-testid='chat-list']"
+
+        print("Checking page state...")
         try:
-            # Selector for the QR code canvas
-            await self.page.wait_for_selector("canvas", timeout=10000)
-            print(f"QR code found. Saving to {qr_path}...")
-            await self.page.screenshot(path=qr_path)
-            print("Please scan the QR code to log in.")
-        except Exception:
-            print("QR code not found, you might be already logged in.")
+            # Wait for either the QR code or the logged-in state to appear
+            await self.page.wait_for_selector(f"{qr_selector}, {main_selector}", timeout=30000)
 
-        # Wait for the main app to load (search bar or message list)
-        print("Waiting for login...")
-        await self.page.wait_for_selector("div[contenteditable='true'][data-tab='3']", timeout=60000)
-        print("Login successful!")
+            # Check if it's the QR code
+            if await self.page.query_selector(qr_selector):
+                print(f"QR code detected. Saving to {qr_path}...")
+                # Give it a small extra time to render fully
+                await asyncio.sleep(2)
+                await self.page.screenshot(path=qr_path)
+                print(">>> Action Required: Please open qr_code.png and scan it with your phone.")
+            else:
+                print("Already logged in, skipping QR scan.")
+        except Exception as e:
+            print(f"Neither QR code nor main interface appeared: {e}")
+            await self.page.screenshot(path="login_error.png")
+            print("Saved 'login_error.png' for troubleshooting.")
+            return False
+
+        # Wait for the main app to load
+        print("Waiting for main interface to be ready...")
+        try:
+            await self.page.wait_for_selector(main_selector, timeout=60000)
+            print("Login successful!")
+            return True
+        except Exception:
+            print("Timeout waiting for main interface. Try running with --head to see what is happening.")
+            await self.page.screenshot(path="login_timeout.png")
+            return False
 
     async def send_messages_from_excel(self, file_path):
         """Reads phone numbers and messages from an Excel file and sends them."""
