@@ -24,7 +24,7 @@ This is a simple WhatsApp Web automation bot built with Python and Playwright. I
 
 2. Install Playwright browsers:
    ```bash
-   playwright install chromium
+   python -m playwright install chromium
    ```
 
 ## Usage
