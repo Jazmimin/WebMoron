@@ -116,8 +116,23 @@ class WhatsAppBot:
             print(f"Waiting {delay:.2f} seconds before next message...")
             await asyncio.sleep(delay)
 
-    async def send_message(self, phone, message):
-        """Sends a message to a specific phone number."""
+    async def send_message(self, phone, message, retry_count=1):
+        """Sends a message to a specific phone number with retry logic."""
+        for attempt in range(retry_count + 1):
+            if attempt > 0:
+                print(f"Retrying send to {phone} (Attempt {attempt+1}/{retry_count+1})...")
+
+            success = await self._do_send_message(phone, message)
+            if success:
+                return True
+
+            # Brief wait before retry
+            await asyncio.sleep(3)
+
+        return False
+
+    async def _do_send_message(self, phone, message):
+        """Internal method to perform the message sending logic."""
         print(f"Sending message to {phone}...")
         # WhatsApp Web URL scheme for direct chat
         # URL encode phone and message to handle special characters
@@ -126,21 +141,40 @@ class WhatsAppBot:
         url = f"https://web.whatsapp.com/send?phone={safe_phone}&text={safe_message}"
 
         try:
-            await self.page.goto(url, wait_until="domcontentloaded")
+            # wait_until="load" for more completeness
+            await self.page.goto(url, wait_until="load", timeout=60000)
         except Exception as e:
-            print(f"Warning during navigation: {e}")
+            print(f"Warning during navigation for {phone}: {e}")
 
         # Selectors for send button and invalid number popup
-        invalid_popup_selectors = ["div[role='button']:has-text('OK')", "button:has-text('OK')", "div:has-text('Phone number shared via url is invalid')"]
-        send_button_selectors = ["span[data-icon='send']", "button[data-testid='compose-btn-send']", "[data-icon='send']"]
+        # Expanded send button selectors based on various WhatsApp versions
+        invalid_popup_selectors = [
+            "div[role='button']:has-text('OK')",
+            "button:has-text('OK')",
+            "div:has-text('Phone number shared via url is invalid')",
+            "[data-testid='popup-controls-ok']"
+        ]
+        send_button_selectors = [
+            "span[data-icon='send']",
+            "button[data-testid='compose-btn-send']",
+            "[data-icon='send']",
+            "button:has(span[data-icon='send'])",
+            "div[aria-label='Send']",
+            "footer div[role='button']:has(span[data-icon='send'])"
+        ]
 
         invalid_selector = ", ".join(invalid_popup_selectors)
         send_selector = ", ".join(send_button_selectors)
         combined_selector = f"{send_selector}, {invalid_selector}"
 
         try:
-            # Wait for either the send button or an error popup using a single combined selector
-            # This is more robust as it avoids managing multiple concurrent tasks
+            # 1. Wait for "Starting chat" overlay to disappear if present
+            try:
+                await self.page.wait_for_selector("div:has-text('Starting chat')", state="hidden", timeout=10000)
+            except:
+                pass
+
+            # 2. Wait for either the send button or an error popup
             print(f"Waiting for chat interface or error for {phone}...")
             element = await self.page.wait_for_selector(combined_selector, timeout=60000)
 
@@ -150,24 +184,28 @@ class WhatsAppBot:
                 return False
 
             # Check if it was an invalid number popup
-            # We use is_visible on specific selectors to identify the match
             is_invalid = False
             for sel in invalid_popup_selectors:
-                if await self.page.is_visible(sel):
-                    is_invalid = True
-                    break
+                try:
+                    if await self.page.is_visible(sel):
+                        is_invalid = True
+                        break
+                except:
+                    continue
 
             if is_invalid:
                 print(f"Phone number {phone} is invalid on WhatsApp.")
                 try:
-                    await element.click() # Click OK
+                    await element.click() # Click OK to clear the popup
                 except:
                     pass
                 return False
 
             # If not invalid, it must be the send button
-            await element.click()
+            # Use a force click in case it's partially obscured
+            await element.click(force=True)
             print(f"Message sent to {phone}!")
+            # Wait to ensure message is actually dispatched
             await asyncio.sleep(2)
             return True
 
