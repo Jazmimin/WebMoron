@@ -17,10 +17,12 @@ class WhatsAppBot:
         """Initializes the browser and context."""
         self.playwright = await async_playwright().start()
         # Use persistent context to save login session
+        # Use a more modern and common User-Agent
         self.context = await self.playwright.chromium.launch_persistent_context(
             user_data_dir=self.session_dir,
             headless=self.headless,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 720}
         )
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
 
@@ -35,16 +37,21 @@ class WhatsAppBot:
         """Navigates to WhatsApp Web and waits for the user to scan the QR code."""
         print("Navigating to WhatsApp Web (this may take a moment)...")
         # Increase navigation timeout
-        await self.page.goto("https://web.whatsapp.com", timeout=60000)
+        try:
+            await self.page.goto("https://web.whatsapp.com", timeout=90000, wait_until="networkidle")
+        except Exception as e:
+            print(f"Navigation warning: {e}. Continuing anyway...")
 
-        # Wait for either the QR code or the main interface
+        # Wait for either the QR code, the main interface, or an error message
         qr_selector = "canvas, [data-testid='qrcode']"
         main_selector = "div[contenteditable='true'][data-tab='3'], #pane-side, [data-testid='chat-list']"
+        error_selector = ".landing-title, ._ak72, [data-testid='update-browser-title']" # Selectors for error/update pages
 
         print("Checking page state...")
         try:
             # Wait for either the QR code or the logged-in state to appear
-            await self.page.wait_for_selector(f"{qr_selector}, {main_selector}", timeout=30000)
+            # Increased timeout to 90 seconds for slower connections
+            await self.page.wait_for_selector(f"{qr_selector}, {main_selector}, {error_selector}", timeout=90000)
 
             # Check if it's the QR code
             if await self.page.query_selector(qr_selector):
