@@ -48,11 +48,24 @@ class WhatsAppBot:
 
             # Check if it's the QR code
             if await self.page.query_selector(qr_selector):
-                print(f"QR code detected. Saving to {qr_path}...")
-                # Give it a small extra time to render fully
-                await asyncio.sleep(2)
-                await self.page.screenshot(path=qr_path)
-                print(">>> Action Required: Please open qr_code.png and scan it with your phone.")
+                print("QR code detected. Waiting for scan...")
+
+                # Loop to keep refreshing the QR code screenshot until logged in or timeout
+                # Increased timeout to 5 minutes to give the user enough time
+                for i in range(10): # 10 * 30s = 300s (5 minutes)
+                    if await self.page.query_selector(main_selector):
+                        break
+
+                    print(f"Refreshing QR code screenshot... (Attempt {i+1}/10)")
+                    await self.page.screenshot(path=qr_path)
+                    print(f">>> Action Required: Scan {qr_path} with your phone.")
+
+                    try:
+                        # Wait for the main interface to appear with a short timeout
+                        await self.page.wait_for_selector(main_selector, timeout=30000)
+                        break
+                    except Exception:
+                        continue
             else:
                 print("Already logged in, skipping QR scan.")
         except Exception as e:
@@ -62,7 +75,7 @@ class WhatsAppBot:
             return False
 
         # Wait for the main app to load
-        print("Waiting for main interface to be ready...")
+        print("Finalizing login...")
         try:
             await self.page.wait_for_selector(main_selector, timeout=60000)
             print("Login successful!")
