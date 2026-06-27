@@ -131,7 +131,7 @@ class WhatsAppBot:
             print(f"Warning during navigation: {e}")
 
         # Selectors for send button and invalid number popup
-        invalid_popup_selectors = ["div[role='button']:has-text('OK')", "button:has-text('OK')", "div:contains('Phone number shared via url is invalid')"]
+        invalid_popup_selectors = ["div[role='button']:has-text('OK')", "button:has-text('OK')", "div:has-text('Phone number shared via url is invalid')"]
         send_button_selectors = ["span[data-icon='send']", "button[data-testid='compose-btn-send']", "[data-icon='send']"]
 
         invalid_selector = ", ".join(invalid_popup_selectors)
