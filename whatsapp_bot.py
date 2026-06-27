@@ -124,31 +124,62 @@ class WhatsAppBot:
         safe_phone = quote(str(phone).strip("+"))
         safe_message = quote(str(message))
         url = f"https://web.whatsapp.com/send?phone={safe_phone}&text={safe_message}"
-        await self.page.goto(url)
 
         try:
-            # Check for invalid number popup or send button
-            # We use race condition to see which one appears first
-            # The invalid number popup often has a button with text "OK"
-            invalid_popup_selector = "div[role='button']:has-text('OK')"
-            send_button_selector = "span[data-icon='send']"
+            await self.page.goto(url, wait_until="domcontentloaded")
+        except Exception as e:
+            print(f"Warning during navigation: {e}")
 
+        # Check for invalid number popup or send button
+        # Multiple selector options for better robustness
+        invalid_popup_selectors = ["div[role='button']:has-text('OK')", "button:has-text('OK')", "div:has-text('Phone number shared via url is invalid')"]
+        send_button_selectors = ["span[data-icon='send']", "button[data-testid='compose-btn-send']", "[data-icon='send']"]
+
+        invalid_selector = ", ".join(invalid_popup_selectors)
+        send_selector = ", ".join(send_button_selectors)
+
+        # Create tasks for waiting
+        send_task = asyncio.create_task(self.page.wait_for_selector(send_selector, timeout=60000))
+        invalid_task = asyncio.create_task(self.page.wait_for_selector(invalid_selector, timeout=60000))
+
+        try:
             # Wait for either the send button or an error popup
-            result = await asyncio.wait([
-                asyncio.create_task(self.page.wait_for_selector(send_button_selector, timeout=30000)),
-                asyncio.create_task(self.page.wait_for_selector(invalid_popup_selector, timeout=30000))
-            ], return_when=asyncio.FIRST_COMPLETED)
+            done, pending = await asyncio.wait(
+                [send_task, invalid_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
 
-            # Check if invalid popup is present
-            if await self.page.query_selector(invalid_popup_selector):
-                print(f"Phone number {phone} is invalid on WhatsApp.")
-                await self.page.click(invalid_popup_selector)
+            # Cancel the pending task to avoid "Task exception was never retrieved" errors
+            for task in pending:
+                task.cancel()
+
+            # Check if invalid popup was the one that finished
+            if invalid_task in done and not invalid_task.cancelled() and invalid_task.exception() is None:
+                print(f"Phone number {phone} is invalid on WhatsApp (detected via popup).")
+                try:
+                    # Try to click the OK button to clear the state
+                    ok_btn = await self.page.query_selector(invalid_selector)
+                    if ok_btn:
+                        await ok_btn.click()
+                except:
+                    pass
                 return False
 
-            await self.page.click(send_button_selector)
-            print(f"Message sent to {phone}!")
-            await asyncio.sleep(2)
-            return True
+            # Otherwise, check if send button is ready
+            if send_task in done and not send_task.cancelled() and send_task.exception() is None:
+                await self.page.click(send_selector)
+                print(f"Message sent to {phone}!")
+                await asyncio.sleep(2)
+                return True
+
+            # If we are here, something else happened (e.g. both timed out)
+            print(f"Could not find send button or error popup for {phone}.")
+            await self.page.screenshot(path=f"send_error_{phone}.png")
+            return False
+
         except Exception as e:
             print(f"Failed to send message to {phone}: {e}")
+            # Ensure tasks are cancelled on error
+            send_task.cancel()
+            invalid_task.cancel()
             return False
