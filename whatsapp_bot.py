@@ -147,11 +147,14 @@ class WhatsAppBot:
             print(f"Warning during navigation for {phone}: {e}")
 
         # Selectors for send button and invalid number popup
-        # Expanded send button selectors based on various WhatsApp versions
+        # Expanded based on localization (Spanish/English) and various WhatsApp versions
         invalid_popup_selectors = [
             "div[role='button']:has-text('OK')",
             "button:has-text('OK')",
+            "div[role='button']:has-text('Aceptar')",
+            "button:has-text('Aceptar')",
             "div:has-text('Phone number shared via url is invalid')",
+            "div:has-text('El número de teléfono compartido a través de la URL es inválido')",
             "[data-testid='popup-controls-ok']"
         ]
         send_button_selectors = [
@@ -160,7 +163,11 @@ class WhatsAppBot:
             "[data-icon='send']",
             "button:has(span[data-icon='send'])",
             "div[aria-label='Send']",
-            "footer div[role='button']:has(span[data-icon='send'])"
+            "div[aria-label='Enviar']",
+            "button[aria-label='Send']",
+            "button[aria-label='Enviar']",
+            "footer div[role='button']:has(span[data-icon='send'])",
+            "span[data-icon='send-light']"
         ]
 
         invalid_selector = ", ".join(invalid_popup_selectors)
