@@ -105,6 +105,12 @@ class WhatsAppBot:
             if not phone or not message:
                 continue
 
+            # Ensure phone is a clean string (Excel often reads them as floats like 123.0)
+            if isinstance(phone, float):
+                phone = str(int(phone))
+            else:
+                phone = str(phone).strip()
+
             success = await self.send_message(phone, message)
             if success:
                 print(f"Successfully sent to {phone}")
