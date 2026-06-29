@@ -228,23 +228,9 @@ class WhatsAppBot:
                     pass
                 return False
 
-            # Double check it's actually the send button by selector matching
-            actual_send = False
-            for sel in send_button_selectors:
-                try:
-                    other = await self.page.query_selector(sel)
-                    if other and await self.page.evaluate("(a, b) => a === b", element, other):
-                        actual_send = True
-                        break
-                except:
-                    continue
-
-            if not actual_send:
-                print(f"Found an element but it doesn't match send button selectors for {phone}.")
-                return False
-
             # If not invalid, it must be the send button
-            # Use a force click in case it's partially obscured
+            # We use a force click in case it's partially obscured
+            print(f"Send button found for {phone}, clicking...")
             await element.click(force=True)
 
             # Post-send verification: wait to see if the button disappears or the message is clear
