@@ -4,7 +4,7 @@ from urllib.parse import quote
 from playwright.async_api import async_playwright
 import openpyxl
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 class WhatsAppBot:
     def __init__(self, session_dir="wa_session", headless=True):
@@ -35,6 +35,22 @@ class WhatsAppBot:
         if self.playwright:
             await self.playwright.stop()
 
+    def _format_phone(self, phone):
+        """Cleans and formats a phone number, adding Argentinian code if missing."""
+        if isinstance(phone, float):
+            phone = str(int(phone))
+        else:
+            phone = str(phone).strip()
+
+        phone = "".join(filter(str.isdigit, phone))
+
+        # Argentine fix: If 10 digits (e.g. 1135897647), add 549
+        if len(phone) == 10:
+            print(f"Detected 10-digit number {phone}. Adding Argentinian country code 549...")
+            phone = "549" + phone
+
+        return phone
+
     async def add_contacts_from_excel(self, file_path):
         """Reads phone numbers and names from an Excel file and adds them to the agenda."""
         print(f"Reading contacts from {file_path}...")
@@ -48,12 +64,7 @@ class WhatsAppBot:
             if not phone or not name:
                 continue
 
-            # Cleanup phone number
-            if isinstance(phone, float):
-                phone = str(int(phone))
-            else:
-                phone = str(phone).strip()
-            phone = "".join(filter(str.isdigit, phone))
+            phone = self._format_phone(phone)
 
             success = await self.add_contact(phone, name)
             if success:
@@ -183,17 +194,10 @@ class WhatsAppBot:
             if not phone or not message:
                 continue
 
-            # Ensure phone is a clean string (Excel often reads them as floats like 123.0)
-            if isinstance(phone, float):
-                phone = str(int(phone))
-            else:
-                phone = str(phone).strip()
-
-            # Robust cleanup: remove all non-digits
-            phone = "".join(filter(str.isdigit, phone))
+            phone = self._format_phone(phone)
 
             if len(phone) < 10:
-                print(f"Skipping {phone}: Number too short (missing country code?)")
+                print(f"Skipping {phone}: Number too short.")
                 continue
 
             success = await self.send_message(phone, message)

@@ -1,63 +1,52 @@
 import asyncio
+import argparse
 import sys
 from whatsapp_bot import WhatsAppBot, VERSION
 
 async def main():
-    print(f"--- WhatsApp Web Bot v{VERSION} ---")
-    # Use --head for non-headless mode
-    headless = "--head" not in sys.argv
-    if not headless:
-        sys.argv.remove("--head")
+    parser = argparse.ArgumentParser(description=f"WhatsApp Web Bot v{VERSION}")
 
-    bot = WhatsAppBot(headless=headless)
+    # Flags
+    parser.add_argument("--head", action="store_true", help="Run in non-headless mode (visible browser)")
+
+    # Mutual exclusive groups or individual arguments
+    parser.add_argument("--excel", metavar="PATH", help="Send messages to a list from Excel")
+    parser.add_argument("--add-excel-contacts", metavar="PATH", help="Add contacts to agenda from Excel")
+    parser.add_argument("--add-contact", nargs=2, metavar=("PHONE", "NAME"), help="Add a single contact to agenda")
+
+    # Positional arguments for single message
+    parser.add_argument("phone", nargs="?", help="Phone number for single message")
+    parser.add_argument("message", nargs="*", help="Message text for single message")
+
+    args = parser.parse_args()
+
+    print(f"--- WhatsApp Web Bot v{VERSION} ---")
+
+    bot = WhatsAppBot(headless=not args.head)
     try:
         await bot.start()
 
-        # Check if we should process an excel file, send a single message, or just login
-        if "--excel" in sys.argv:
-            try:
-                excel_index = sys.argv.index("--excel")
-                file_path = sys.argv[excel_index + 1]
-                await bot.login()
-                await bot.send_messages_from_excel(file_path)
-            except (ValueError, IndexError):
-                print("Usage: python main.py --excel <path_to_excel_file>")
-        elif "--add-excel-contacts" in sys.argv:
-            try:
-                idx = sys.argv.index("--add-excel-contacts")
-                file_path = sys.argv[idx + 1]
-                await bot.login()
-                await bot.add_contacts_from_excel(file_path)
-            except (ValueError, IndexError):
-                print("Usage: python main.py --add-excel-contacts <path_to_excel_file>")
-        elif "--add-contact" in sys.argv:
-            try:
-                idx = sys.argv.index("--add-contact")
-                phone = sys.argv[idx + 1]
-                name = sys.argv[idx + 2]
-                await bot.login()
-                await bot.add_contact(phone, name)
-            except (ValueError, IndexError):
-                print("Usage: python main.py --add-contact <phone> <name>")
-        elif len(sys.argv) >= 3:
-            phone = sys.argv[1]
-            message = " ".join(sys.argv[2:])
-
-            # Ensure we are logged in before sending
+        # Decide action
+        if args.excel:
             await bot.login()
-            await bot.send_message(phone, message)
+            await bot.send_messages_from_excel(args.excel)
+        elif args.add_excel_contacts:
+            await bot.login()
+            await bot.add_contacts_from_excel(args.add_excel_contacts)
+        elif args.add_contact:
+            await bot.login()
+            await bot.add_contact(args.add_contact[0], args.add_contact[1])
+        elif args.phone and args.message:
+            await bot.login()
+            full_message = " ".join(args.message)
+            await bot.send_message(args.phone, full_message)
         else:
-            print("Usage:")
-            print("  Single message:  python main.py <phone_number> <message>")
-            print("  Excel list:      python main.py --excel <path_to_excel_file>")
-            print("  Add contact:     python main.py --add-contact <phone> <name>")
-            print("  Add Excel list:  python main.py --add-excel-contacts <path_to_excel_file>")
-            print("  Login only:      python main.py")
-            print("\nOptions:")
-            print("  --head: Run in non-headless mode (visible browser window)")
-
-            print("\nRunning in login mode. Scan the QR code if prompted.")
-            await bot.login()
+            # No specific command provided, just show help or default to login
+            if len(sys.argv) <= 1 or (len(sys.argv) == 2 and args.head):
+                print("Running in login mode. Scan the QR code if prompted.")
+                await bot.login()
+            else:
+                parser.print_help()
 
     except Exception as e:
         print(f"An error occurred: {e}")

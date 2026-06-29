@@ -1,4 +1,4 @@
-# WhatsApp Web Automation Bot v1.0.0
+# WhatsApp Web Automation Bot v1.0.1
 
 This is a simple WhatsApp Web automation bot built with Python and Playwright. It allows you to send messages through the WhatsApp Web interface, bypassing the need for the official API.
 
@@ -48,7 +48,7 @@ Example:
 ```bash
 python main.py 1234567890 "Hello from my automated bot!"
 ```
-*Note: You **MUST** include the country code in the phone number without any symbols. For example, if you are messaging an Argentinian number, use `54911...` instead of just `11...`.*
+*Note: You **MUST** include the country code in the phone number. For Argentinian numbers, the bot will automatically try to add `549` if you provide a 10-digit number (like `113589...`), but it's always safer to include it manually.*
 
 #### Batch Messages from Excel
 You can send messages to a list of contacts provided in an Excel file (`.xlsx`).
