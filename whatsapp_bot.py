@@ -142,25 +142,66 @@ class WhatsAppBot:
 
             # 3. Fill details
             print("Filling contact details...")
+            # Detect form header first to ensure we are in the right pane
+            form_header = "div:has-text('New contact'), div:has-text('Nuevo contacto')"
+            try:
+                await self.page.wait_for_selector(form_header, timeout=10000)
+            except:
+                print("Warning: Contact form header not detected, but attempting to fill anyway.")
+
+            # Identify input fields by index if aria-labels fail (common in dynamic UIs)
+            # Typically 0 is Name, 1 is Surname, 2 is Phone (or variations)
+            inputs = await self.page.query_selector_all("input[type='text'], div[contenteditable='true']")
+
             # First Name
             name_inputs = [
                 "input[aria-label='First name']",
                 "input[aria-label='Nombre']",
-                "div[contenteditable='true'][data-tab='1']",
                 "input[placeholder='First name']",
                 "input[placeholder='Nombre']"
             ]
-            await self.page.fill(", ".join(name_inputs), str(name))
 
             # Phone
             phone_inputs = [
                 "input[aria-label='Phone number']",
                 "input[aria-label='Teléfono']",
-                "div[contenteditable='true'][data-tab='2']",
                 "input[placeholder='Phone number']",
                 "input[placeholder='Teléfono']"
             ]
-            await self.page.fill(", ".join(phone_inputs), str(phone))
+
+            # Last Name (Apellido)
+            surname_inputs = [
+                "input[aria-label='Last name']",
+                "input[aria-label='Apellido']",
+                "input[aria-label='Apellidos']",
+                "input[placeholder='Last name']",
+                "input[placeholder='Apellido']"
+            ]
+
+            # Fill Name
+            try:
+                await self.page.wait_for_selector(", ".join(name_inputs), timeout=5000)
+                await self.page.fill(", ".join(name_inputs), str(name))
+            except:
+                # Fallback: try filling the first text input found
+                if len(inputs) > 0:
+                    await inputs[0].fill(str(name))
+
+            # Optional: Clear Surname if it's autofocusing or causing issues
+            try:
+                await self.page.fill(", ".join(surname_inputs), " ", timeout=2000)
+            except:
+                pass
+
+            # Fill Phone
+            try:
+                await self.page.wait_for_selector(", ".join(phone_inputs), timeout=5000)
+                await self.page.fill(", ".join(phone_inputs), str(phone))
+            except:
+                # Fallback: try filling the last text input or the second/third one
+                if len(inputs) >= 2:
+                    # Usually Phone is after Name/Surname
+                    await inputs[-1].fill(str(phone))
 
             # 4. Click Save
             save_buttons = [
