@@ -104,18 +104,35 @@ class WhatsAppBot:
             await asyncio.sleep(1)
 
             # 2. Click "New contact"
+            # We use more specific child-of-menu selectors to avoid white-screen/background matches
             new_contact_selectors = [
-                "div:has-text('New contact')",
-                "div:has-text('Nuevo contacto')",
-                "[data-testid='new-contact-button']",
+                "[data-testid='cell-frame-container'] div:has-text('New contact')",
+                "[data-testid='cell-frame-container'] div:has-text('Nuevo contacto')",
                 "div[role='button']:has-text('New contact')",
-                "div[role='button']:has-text('Nuevo contacto')"
+                "div[role='button']:has-text('Nuevo contacto')",
+                "[data-testid='new-contact-button']"
             ]
 
             print("Searching for 'New Contact' option...")
             try:
-                await self.page.wait_for_selector(", ".join(new_contact_selectors), timeout=5000)
-                await self.page.click(", ".join(new_contact_selectors))
+                # Wait for the specific menu container if possible
+                await asyncio.sleep(1) # Extra breath for the menu to slide in
+                await self.page.wait_for_selector(", ".join(new_contact_selectors), timeout=10000, state="visible")
+
+                # Try clicking the one that is actually visible and has text
+                found = False
+                for sel in new_contact_selectors:
+                    elements = await self.page.query_selector_all(sel)
+                    for el in elements:
+                        if await el.is_visible():
+                            await el.click()
+                            found = True
+                            break
+                    if found: break
+
+                if not found:
+                    raise Exception("No visible 'New Contact' button found")
+
             except Exception as e:
                 print(f"Could not find 'New Contact' option: {e}")
                 await self.page.screenshot(path="add_contact_fail_step2.png")
