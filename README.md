@@ -1,4 +1,4 @@
-# WhatsApp Web Automation Bot
+# WhatsApp Web Automation Bot v1.0.0
 
 This is a simple WhatsApp Web automation bot built with Python and Playwright. It allows you to send messages through the WhatsApp Web interface, bypassing the need for the official API.
 

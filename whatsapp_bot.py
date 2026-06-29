@@ -4,6 +4,8 @@ from urllib.parse import quote
 from playwright.async_api import async_playwright
 import openpyxl
 
+VERSION = "1.0.0"
+
 class WhatsAppBot:
     def __init__(self, session_dir="wa_session", headless=True):
         self.session_dir = session_dir
@@ -32,6 +34,82 @@ class WhatsAppBot:
             await self.context.close()
         if self.playwright:
             await self.playwright.stop()
+
+    async def add_contacts_from_excel(self, file_path):
+        """Reads phone numbers and names from an Excel file and adds them to the agenda."""
+        print(f"Reading contacts from {file_path}...")
+        workbook = openpyxl.load_workbook(file_path)
+        sheet = workbook.active
+
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            phone = row[0]
+            name = row[1]
+
+            if not phone or not name:
+                continue
+
+            # Cleanup phone number
+            if isinstance(phone, float):
+                phone = str(int(phone))
+            else:
+                phone = str(phone).strip()
+            phone = "".join(filter(str.isdigit, phone))
+
+            success = await self.add_contact(phone, name)
+            if success:
+                print(f"Successfully added {name} ({phone})")
+            else:
+                print(f"Failed to add {name} ({phone})")
+
+            # Random delay
+            delay = random.uniform(3, 7)
+            await asyncio.sleep(delay)
+
+    async def add_contact(self, phone, name):
+        """Adds a single contact to the WhatsApp agenda."""
+        print(f"Adding contact {name} ({phone})...")
+
+        try:
+            # 1. Open "New Chat" menu
+            new_chat_selectors = ["[data-testid='chat-list-search']", "span[data-icon='chat']", "button[aria-label='New chat']"]
+            await self.page.click(", ".join(new_chat_selectors))
+            await asyncio.sleep(1)
+
+            # 2. Click "New contact"
+            new_contact_selectors = [
+                "div:has-text('New contact')",
+                "div:has-text('Nuevo contacto')",
+                "[data-testid='new-contact-button']"
+            ]
+            await self.page.click(", ".join(new_contact_selectors))
+            await asyncio.sleep(1)
+
+            # 3. Fill details
+            # First Name
+            name_input = "input[aria-label='First name'], input[aria-label='Nombre']"
+            await self.page.fill(name_input, str(name))
+
+            # Phone
+            phone_input = "input[aria-label='Phone number'], input[aria-label='Teléfono']"
+            await self.page.fill(phone_input, str(phone))
+
+            # 4. Click Save
+            save_button = "div[role='button']:has-text('Save'), div[role='button']:has-text('Guardar')"
+            await self.page.click(save_button)
+
+            # Wait for save to complete or error
+            await asyncio.sleep(2)
+
+            # Close the contact pane if still open (success or error)
+            close_button = "span[data-icon='x']"
+            if await self.page.is_visible(close_button):
+                await self.page.click(close_button)
+
+            return True
+        except Exception as e:
+            print(f"Error adding contact {phone}: {e}")
+            await self.page.screenshot(path=f"add_contact_error_{phone}.png")
+            return False
 
     async def login(self, qr_path="qr_code.png"):
         """Navigates to WhatsApp Web and waits for the user to scan the QR code."""
