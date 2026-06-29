@@ -176,8 +176,10 @@ class WhatsAppBot:
 
         try:
             # 1. Wait for "Starting chat" overlay to disappear if present
+            # Expanded to include Spanish "Iniciando chat"
             try:
-                await self.page.wait_for_selector("div:has-text('Starting chat')", state="hidden", timeout=10000)
+                starting_overlay = "div:has-text('Starting chat'), div:has-text('Iniciando chat'), [role='progressbar']"
+                await self.page.wait_for_selector(starting_overlay, state="hidden", timeout=20000)
             except:
                 pass
 
