@@ -77,44 +77,95 @@ class WhatsAppBot:
             await asyncio.sleep(delay)
 
     async def add_contact(self, phone, name):
-        """Adds a single contact to the WhatsApp agenda."""
+        """Adds a single contact to the WhatsApp agenda with robust selector detection."""
         print(f"Adding contact {name} ({phone})...")
 
         try:
             # 1. Open "New Chat" menu
-            new_chat_selectors = ["[data-testid='chat-list-search']", "span[data-icon='chat']", "button[aria-label='New chat']"]
-            await self.page.click(", ".join(new_chat_selectors))
+            # Refined selectors for the 'New Chat' button (plus icon)
+            new_chat_selectors = [
+                "[data-testid='chat-list-search']",
+                "span[data-icon='chat']",
+                "button[aria-label='New chat']",
+                "button[aria-label='Nuevo chat']",
+                "header span[data-icon='plus']",
+                "header span[data-icon='chat-add']"
+            ]
+
+            print("Searching for 'New Chat' button...")
+            try:
+                await self.page.wait_for_selector(", ".join(new_chat_selectors), timeout=10000)
+                await self.page.click(", ".join(new_chat_selectors))
+            except Exception as e:
+                print(f"Could not find 'New Chat' button: {e}")
+                await self.page.screenshot(path="add_contact_fail_step1.png")
+                return False
+
             await asyncio.sleep(1)
 
             # 2. Click "New contact"
             new_contact_selectors = [
                 "div:has-text('New contact')",
                 "div:has-text('Nuevo contacto')",
-                "[data-testid='new-contact-button']"
+                "[data-testid='new-contact-button']",
+                "div[role='button']:has-text('New contact')",
+                "div[role='button']:has-text('Nuevo contacto')"
             ]
-            await self.page.click(", ".join(new_contact_selectors))
+
+            print("Searching for 'New Contact' option...")
+            try:
+                await self.page.wait_for_selector(", ".join(new_contact_selectors), timeout=5000)
+                await self.page.click(", ".join(new_contact_selectors))
+            except Exception as e:
+                print(f"Could not find 'New Contact' option: {e}")
+                await self.page.screenshot(path="add_contact_fail_step2.png")
+                return False
+
             await asyncio.sleep(1)
 
             # 3. Fill details
+            print("Filling contact details...")
             # First Name
-            name_input = "input[aria-label='First name'], input[aria-label='Nombre']"
-            await self.page.fill(name_input, str(name))
+            name_inputs = [
+                "input[aria-label='First name']",
+                "input[aria-label='Nombre']",
+                "div[contenteditable='true'][data-tab='1']",
+                "input[placeholder='First name']",
+                "input[placeholder='Nombre']"
+            ]
+            await self.page.fill(", ".join(name_inputs), str(name))
 
             # Phone
-            phone_input = "input[aria-label='Phone number'], input[aria-label='Teléfono']"
-            await self.page.fill(phone_input, str(phone))
+            phone_inputs = [
+                "input[aria-label='Phone number']",
+                "input[aria-label='Teléfono']",
+                "div[contenteditable='true'][data-tab='2']",
+                "input[placeholder='Phone number']",
+                "input[placeholder='Teléfono']"
+            ]
+            await self.page.fill(", ".join(phone_inputs), str(phone))
 
             # 4. Click Save
-            save_button = "div[role='button']:has-text('Save'), div[role='button']:has-text('Guardar')"
-            await self.page.click(save_button)
+            save_buttons = [
+                "div[role='button']:has-text('Save')",
+                "div[role='button']:has-text('Guardar')",
+                "button:has-text('Save')",
+                "button:has-text('Guardar')",
+                "[data-testid='contact-edit-save-button']"
+            ]
+
+            print("Saving contact...")
+            await self.page.click(", ".join(save_buttons))
 
             # Wait for save to complete or error
             await asyncio.sleep(2)
 
             # Close the contact pane if still open (success or error)
-            close_button = "span[data-icon='x']"
-            if await self.page.is_visible(close_button):
-                await self.page.click(close_button)
+            close_buttons = ["span[data-icon='x']", "button[aria-label='Close']", "button[aria-label='Cerrar']"]
+            for btn in close_buttons:
+                if await self.page.is_visible(btn):
+                    await self.page.click(btn)
+                    break
 
             return True
         except Exception as e:
