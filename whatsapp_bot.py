@@ -180,7 +180,10 @@ class WhatsAppBot:
             "button[aria-label='Send']",
             "button[aria-label='Enviar']",
             "footer div[role='button']:has(span[data-icon='send'])",
-            "span[data-icon='send-light']"
+            "span[data-icon='send-light']",
+            "span[data-icon='send-dark']",
+            "button:has(span[data-icon='send-light'])",
+            "button:has(span[data-icon='send-dark'])"
         ]
 
         invalid_selector = ", ".join(invalid_popup_selectors)
@@ -228,9 +231,13 @@ class WhatsAppBot:
             # Double check it's actually the send button by selector matching
             actual_send = False
             for sel in send_button_selectors:
-                if await element.is_visible() and await self.page.query_selector(sel) == element:
-                    actual_send = True
-                    break
+                try:
+                    other = await self.page.query_selector(sel)
+                    if other and await self.page.evaluate("(a, b) => a === b", element, other):
+                        actual_send = True
+                        break
+                except:
+                    continue
 
             if not actual_send:
                 print(f"Found an element but it doesn't match send button selectors for {phone}.")
