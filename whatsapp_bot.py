@@ -209,14 +209,24 @@ class WhatsAppBot:
                 "div[role='button']:has-text('Guardar')",
                 "button:has-text('Save')",
                 "button:has-text('Guardar')",
-                "[data-testid='contact-edit-save-button']"
+                "[data-testid='contact-edit-save-button']",
+                "span:has-text('Save')",
+                "span:has-text('Guardar')",
+                "div[aria-label='Save']",
+                "div[aria-label='Guardar']"
             ]
 
             print("Saving contact...")
-            await self.page.click(", ".join(save_buttons))
+            try:
+                # Try clicking first
+                await self.page.click(", ".join(save_buttons), timeout=10000)
+            except:
+                # Fallback: try pressing Enter if clicking failed
+                print("Clicking save failed, trying Enter key...")
+                await self.page.keyboard.press("Enter")
 
             # Wait for save to complete or error
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
 
             # Close the contact pane if still open (success or error)
             close_buttons = ["span[data-icon='x']", "button[aria-label='Close']", "button[aria-label='Cerrar']"]
