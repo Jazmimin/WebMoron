@@ -111,6 +111,13 @@ class WhatsAppBot:
             else:
                 phone = str(phone).strip()
 
+            # Robust cleanup: remove all non-digits
+            phone = "".join(filter(str.isdigit, phone))
+
+            if len(phone) < 10:
+                print(f"Skipping {phone}: Number too short (missing country code?)")
+                continue
+
             success = await self.send_message(phone, message)
             if success:
                 print(f"Successfully sent to {phone}")
@@ -211,14 +218,38 @@ class WhatsAppBot:
             if is_invalid:
                 print(f"Phone number {phone} is invalid on WhatsApp.")
                 try:
+                    # Capture screenshot of the invalid popup for confirmation
+                    await self.page.screenshot(path=f"invalid_{phone}.png")
                     await element.click() # Click OK to clear the popup
                 except:
                     pass
                 return False
 
+            # Double check it's actually the send button by selector matching
+            actual_send = False
+            for sel in send_button_selectors:
+                if await element.is_visible() and await self.page.query_selector(sel) == element:
+                    actual_send = True
+                    break
+
+            if not actual_send:
+                print(f"Found an element but it doesn't match send button selectors for {phone}.")
+                return False
+
             # If not invalid, it must be the send button
             # Use a force click in case it's partially obscured
             await element.click(force=True)
+
+            # Post-send verification: wait to see if the button disappears or the message is clear
+            await asyncio.sleep(1)
+            if await self.page.is_visible(send_selector):
+                # Try clicking one more time if still visible
+                try:
+                    await element.click(force=True)
+                    await asyncio.sleep(1)
+                except:
+                    pass
+
             print(f"Message sent to {phone}!")
             # Wait to ensure message is actually dispatched
             await asyncio.sleep(2)

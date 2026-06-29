@@ -48,13 +48,13 @@ Example:
 ```bash
 python main.py 1234567890 "Hello from my automated bot!"
 ```
-*Note: Include the country code in the phone number without any symbols (e.g., `1234567890` instead of `+1 (234) 567-890`).*
+*Note: You **MUST** include the country code in the phone number without any symbols. For example, if you are messaging an Argentinian number, use `54911...` instead of just `11...`.*
 
 #### Batch Messages from Excel
 You can send messages to a list of contacts provided in an Excel file (`.xlsx`).
 
 1. Prepare your Excel file with the following structure:
-   - **Column A:** Phone numbers (with country code, e.g., `1234567890`).
+   - **Column A:** Phone numbers (**MUST include country code**, e.g., `5491135897647`).
    - **Column B:** Messages.
    - *Note: The first row is treated as a header and skipped.*
 
