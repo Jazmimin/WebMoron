@@ -4,7 +4,7 @@ from urllib.parse import quote
 from playwright.async_api import async_playwright
 import openpyxl
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 class WhatsAppBot:
     def __init__(self, session_dir="wa_session", headless=True):
@@ -24,7 +24,12 @@ class WhatsAppBot:
             user_data_dir=self.session_dir,
             headless=self.headless,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 720}
+            viewport={"width": 1280, "height": 720},
+            # Stealth: Hide automation flags
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox"
+            ]
         )
         self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
 
@@ -306,6 +311,7 @@ class WhatsAppBot:
         workbook = openpyxl.load_workbook(file_path)
         sheet = workbook.active
 
+        count = 0
         for row in sheet.iter_rows(min_row=2, values_only=True):
             phone = row[0]
             message = row[1]
@@ -325,10 +331,18 @@ class WhatsAppBot:
             else:
                 print(f"Failed to send to {phone}")
 
-            # Random delay between messages to avoid being flagged
-            delay = random.uniform(5, 10)
-            print(f"Waiting {delay:.2f} seconds before next message...")
-            await asyncio.sleep(delay)
+            # Random delay between messages
+            delay = random.uniform(8, 15)
+
+            count += 1
+            # Human break: every 6 messages, wait longer
+            if count % 6 == 0:
+                break_time = random.uniform(60, 120)
+                print(f"Taking a human break for {break_time:.2f} seconds...")
+                await asyncio.sleep(break_time)
+            else:
+                print(f"Waiting {delay:.2f} seconds before next message...")
+                await asyncio.sleep(delay)
 
     async def send_message(self, phone, message, retry_count=1):
         """Sends a message to a specific phone number with retry logic."""
@@ -345,17 +359,22 @@ class WhatsAppBot:
 
         return False
 
+    async def _type_human_like(self, selector, text):
+        """Types text character by character with random delays."""
+        await self.page.click(selector)
+        for char in text:
+            await self.page.keyboard.type(char)
+            await asyncio.sleep(random.uniform(0.05, 0.15))
+
     async def _do_send_message(self, phone, message):
-        """Internal method to perform the message sending logic."""
-        print(f"Sending message to {phone}...")
-        # WhatsApp Web URL scheme for direct chat
-        # URL encode phone and message to handle special characters
+        """Internal method to perform the message sending logic with stealth."""
+        print(f"Opening chat for {phone}...")
+        # WhatsApp Web URL scheme to open the chat without pre-filling text
+        # Pre-filling text via URL is a strong bot indicator
         safe_phone = quote(str(phone).strip("+"))
-        safe_message = quote(str(message))
-        url = f"https://web.whatsapp.com/send?phone={safe_phone}&text={safe_message}"
+        url = f"https://web.whatsapp.com/send?phone={safe_phone}"
 
         try:
-            # wait_until="load" for more completeness
             await self.page.goto(url, wait_until="load", timeout=60000)
         except Exception as e:
             print(f"Warning during navigation for {phone}: {e}")
@@ -400,39 +419,41 @@ class WhatsAppBot:
             except:
                 pass
 
-            # 2. Wait for either the send button or an error popup
+            # 2. Wait for chat input or error
+            chat_input = "div[contenteditable='true'][data-tab='10']"
+            combined_selector_stealth = f"{chat_input}, {invalid_selector}"
+
             print(f"Waiting for chat interface or error for {phone}...")
-            element = await self.page.wait_for_selector(combined_selector, timeout=60000)
+            element = await self.page.wait_for_selector(combined_selector_stealth, timeout=60000)
 
             if not element:
-                print(f"Neither send button nor error popup appeared for {phone}.")
-                await self.page.screenshot(path=f"send_error_{phone}.png")
                 return False
 
-            # Check if it was an invalid number popup
+            # Check if invalid
             is_invalid = False
             for sel in invalid_popup_selectors:
-                try:
-                    if await self.page.is_visible(sel):
-                        is_invalid = True
-                        break
-                except:
-                    continue
+                if await self.page.is_visible(sel):
+                    is_invalid = True
+                    break
 
             if is_invalid:
-                print(f"Phone number {phone} is invalid on WhatsApp.")
-                try:
-                    # Capture screenshot of the invalid popup for confirmation
-                    await self.page.screenshot(path=f"invalid_{phone}.png")
-                    await element.click() # Click OK to clear the popup
-                except:
-                    pass
+                print(f"Phone number {phone} is invalid.")
+                await element.click()
                 return False
 
-            # If not invalid, it must be the send button
-            # We use a force click in case it's partially obscured
-            print(f"Send button found for {phone}, clicking...")
-            await element.click(force=True)
+            # 3. Type message manually (Stealth)
+            print(f"Typing message for {phone}...")
+            await self._type_human_like(chat_input, message)
+            await asyncio.sleep(random.uniform(1, 2))
+
+            # 4. Find and click send button
+            # Re-detecting send button because it usually appears after typing
+            send_btn = await self.page.wait_for_selector(send_selector, timeout=10000)
+            if send_btn:
+                await send_btn.click(force=True)
+                print(f"Message sent to {phone}!")
+                await asyncio.sleep(2)
+                return True
 
             # Post-send verification: wait to see if the button disappears or the message is clear
             await asyncio.sleep(1)
